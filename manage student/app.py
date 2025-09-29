@@ -38,7 +38,6 @@ def run_schema():
           password TEXT NOT NULL,
           role TEXT NOT NULL CHECK(role IN ('admin'))
         );
-
         CREATE TABLE IF NOT EXISTS uploads(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           filename TEXT NOT NULL,
@@ -47,7 +46,6 @@ def run_schema():
           created_at TEXT NOT NULL,
           uploader_username TEXT NOT NULL
         );
-
         CREATE TABLE IF NOT EXISTS students(
           roll_no TEXT PRIMARY KEY,
           name TEXT NOT NULL,
@@ -60,13 +58,11 @@ def run_schema():
           session TEXT,
           regn_no TEXT
         );
-
         CREATE TABLE IF NOT EXISTS upload_students_map(
           upload_id INTEGER NOT NULL REFERENCES uploads(id) ON DELETE CASCADE,
           roll_no TEXT NOT NULL,
           created_new INTEGER NOT NULL DEFAULT 0
         );
-
         CREATE TABLE IF NOT EXISTS attendance(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           roll_no TEXT NOT NULL,
@@ -78,7 +74,6 @@ def run_schema():
           UNIQUE(roll_no, subject),
           FOREIGN KEY (roll_no) REFERENCES students(roll_no) ON DELETE CASCADE
         );
-
         CREATE TABLE IF NOT EXISTS marks(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           roll_no TEXT NOT NULL,
@@ -92,7 +87,6 @@ def run_schema():
           UNIQUE(roll_no, exam, subject),
           FOREIGN KEY (roll_no) REFERENCES students(roll_no) ON DELETE CASCADE
         );
-
         CREATE TABLE IF NOT EXISTS remarks(
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           roll_no TEXT NOT NULL,
@@ -102,7 +96,7 @@ def run_schema():
           FOREIGN KEY (roll_no) REFERENCES students(roll_no) ON DELETE CASCADE
         );
         """)
-        # migrations for old DBs
+        # migrations
         cur = con.cursor()
         cur.execute("PRAGMA table_info(students)")
         scols = [r[1] for r in cur.fetchall()]
@@ -110,10 +104,8 @@ def run_schema():
         if "address" not in scols:  con.execute("ALTER TABLE students ADD COLUMN address TEXT")
         if "session" not in scols:  con.execute("ALTER TABLE students ADD COLUMN session TEXT")
         if "regn_no" not in scols:  con.execute("ALTER TABLE students ADD COLUMN regn_no TEXT")
-
         cur.execute("PRAGMA table_info(attendance)"); acols=[r[1] for r in cur.fetchall()]
         if "course" not in acols:   con.execute("ALTER TABLE attendance ADD COLUMN course TEXT")
-
         cur.execute("PRAGMA table_info(marks)"); mcols=[r[1] for r in cur.fetchall()]
         if "course" not in mcols:   con.execute("ALTER TABLE marks ADD COLUMN course TEXT")
         con.commit()
@@ -125,7 +117,6 @@ def ensure_admin():
             con.execute("INSERT INTO users(username,password,role) VALUES(?,?,?)",
                         ("admin", generate_password_hash("admin123"), "admin"))
             con.commit()
-
 # --------------- Utils ---------------
 def load_table(path: str) -> pd.DataFrame:
     ext = os.path.splitext(path)[1].lower()
@@ -1086,7 +1077,18 @@ def student_pdf(roll):
     return send_file(buf, as_attachment=True, download_name=f'{student["roll_no"]}_report.pdf')
 
 # --------------- Entry ---------------
+def init_db_on_import():
+    """Ensure schema + default admin exist when app is imported (e.g., WSGI)."""
+    try:
+        run_schema()
+        ensure_admin()
+        print("✅ Database schema ensured + admin user ready")
+    except Exception as e:
+        traceback.print_exc()
+        print("⚠️ DB init failed:", e)
+
+# Run DB init when app is imported (for PythonAnywhere WSGI)
+init_db_on_import()
+
 if __name__ == '__main__':
-    run_schema()
-    ensure_admin()
     app.run(debug=True, use_reloader=False, threaded=False)
